@@ -54,7 +54,7 @@ export const register = async (req, res) => {
   }
 };
 
-export const login = (req, res) => {
+export const login = async (req, res) => {
   const { email, password } = req.body;
   const errors = [];
 
@@ -70,38 +70,33 @@ export const login = (req, res) => {
   }
 
   try {
-    db.query(
-      "SELECT * FROM usuarios WHERE email = $1",
-      [email],
-      async (error, result) => {
-        if (error) {
-          console.log(error);
-          return res.status(500).json({ errors: ["Server error"] });
-        }
-
-        if (result.rows.length === 0) {
-          return res.status(400).json({ errors: ["Invalid credentials"] });
-        }
-
-        const user = result.rows[0];
-
-        const isPasswordMatch = await bcrypt.compare(password, user.contraseña);
-
-        if (!isPasswordMatch) {
-          return res.status(400).json({ errors: ["Invalid credentials"] });
-        }
-
-        const token = await generateToken(user.id);
-
-        res.cookie("token", token, {
-          httpOnly: true,
-          sameSite: "strict",
-          maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
-        });
-
-        return res.status(200).json({ message: "Login successfully" });
-      }
+    const result = await db.query(
+      "SELECT * FROM usuarios WHERE email = $1 LIMIT 1",
+      [email]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ errors: ["Invalid credentials"] });
+    }
+
+    console.log("contenido de ressult", result);
+
+    const user = result.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.contraseña);
+
+    if (!isPasswordValid) {
+      return res.status(400).json({ errors: ["Invalid credentials"] });
+    }
+
+    const token = await generateToken(user.id);
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 day
+    });
+
+    return res.status(200).json({ message: "Login successfully" });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ errors: ["Server error"] });
@@ -111,8 +106,4 @@ export const login = (req, res) => {
 export const logout = (req, res) => {
   res.clearCookie("token");
   res.status(200).json({ message: "Logout successfully" });
-};
-
-export const profile = (req, res) => {
-  res.send("Profile route");
 };
